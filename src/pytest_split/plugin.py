@@ -200,6 +200,9 @@ class PytestSplitCachePlugin(Base):
         for test_reports in terminal_reporter.stats.values():  # type: ignore[union-attr]
             for test_report in test_reports:
                 if isinstance(test_report, TestReport):
+                    if test_report.outcome == "skipped":
+                        # don't record skipped tests
+                        continue
                     # These ifs be removed after this is solved: # https://github.com/spulec/freezegun/issues/286
                     if test_report.duration < 0:
                         continue  # pragma: no cover
