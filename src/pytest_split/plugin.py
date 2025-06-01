@@ -138,16 +138,6 @@ class Base:
             self.cached_durations = dict(self.cached_durations)
 
 
-def filter_skipped_tests(
-    items: "List[nodes.Item]",
-) -> "List[nodes.Item]":
-    """
-    Filter out skipped tests from the list of items.
-    This is useful to ensure that skipped tests do not affect the splitting logic.
-    """
-    return [item for item in items if not item.get_closest_marker("skip")]
-
-
 class PytestSplitPlugin(Base):
     def __init__(self, config: "Config"):
         super().__init__(config)
@@ -172,14 +162,15 @@ class PytestSplitPlugin(Base):
         group_idx: int = config.option.group
 
         algo = algorithms.Algorithms[config.option.splitting_algorithm].value
-        items = filter_skipped_tests(items)
+        deselected_items = [item for item in items if item.get_closest_marker("skip")]
+        items[:] = [item for item in items if item.get_closest_marker("skip") is None]
         groups = algo(splits, items, self.cached_durations)
         group = groups[group_idx - 1]
 
         ensure_ipynb_compatibility(group, items)
 
         items[:] = group.selected
-        config.hook.pytest_deselected(items=group.deselected)
+        config.hook.pytest_deselected(items=group.deselected + deselected_items)
 
         self.writer.line(
             self.writer.markup(
@@ -209,9 +200,6 @@ class PytestSplitCachePlugin(Base):
         for test_reports in terminal_reporter.stats.values():  # type: ignore[union-attr]
             for test_report in test_reports:
                 if isinstance(test_report, TestReport):
-                    if test_report.outcome == "skipped":
-                        # don't record skipped tests
-                        continue
                     # These ifs be removed after this is solved: # https://github.com/spulec/freezegun/issues/286
                     if test_report.duration < 0:
                         continue  # pragma: no cover
